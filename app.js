@@ -1,11 +1,15 @@
 const express = require("express");
-
-const translate =
-require("@vitalets/google-translate-api");
-
+const translate = require("@vitalets/google-translate-api");
 const mysql = require("mysql2");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+
+const multer = require("multer");
+const Tesseract = require("tesseract.js");
+const sharp = require("sharp");
+
+const fs = require("fs");
+const pdfParse = require("pdf-parse");
 
 const app = express();
 
@@ -15,6 +19,26 @@ app.use(express.static("public"));
 
 app.set("view engine", "ejs");
 
+// ======================
+// UPLOAD CONFIG
+// ======================
+const upload = multer({
+    dest: "uploads/",
+    fileFilter: (req, file, cb) => {
+        if (
+            file.mimetype.startsWith("image") ||
+            file.mimetype === "application/pdf"
+        ) {
+            cb(null, true);
+        } else {
+            cb(new Error("Hanya image / PDF"));
+        }
+    }
+});
+
+// ======================
+// DATABASE
+// ======================
 const db = mysql.createConnection({
     host: "localhost",
     user: "root",
@@ -23,154 +47,170 @@ const db = mysql.createConnection({
 });
 
 db.connect((err) => {
-
-    if (err) {
-        console.log("Database gagal terhubung");
-    } else {
-        console.log("Database berhasil terhubung");
-    }
+    if (err) console.log("DB ERROR");
+    else console.log("DB CONNECTED");
 });
 
-
+// ======================
 // HOME
+// ======================
 app.get("/", (req, res) => {
 
-    const sql =
-        "SELECT * FROM history_translate ORDER BY id DESC";
+    db.query(
+        "SELECT * FROM history_translate ORDER BY id DESC",
+        (err, result) => {
 
-    db.query(sql, (err, result) => {
+            if (err) return res.render("index", { histories: [] });
 
-        // jika error database
-        if (err) {
-
-            console.log(err);
-
-            return res.render("index", {
-                histories: []
+            res.render("index", {
+                histories: result || []
             });
         }
-
-        // jika kosong
-        if(!result){
-            result = [];
-        }
-
-        res.render("index", {
-            histories: result
-        });
-    });
+    );
 });
 
-
-// TRANSLATE
-app.post("/translate", async (req, res) => {
+// ======================
+// TRANSLATE + SLANG NLP
+// ======================
+app.post("/translate", (req, res) => {
 
     const { text, source, target } = req.body;
 
-    if(!text || text.trim() === ""){
+    if (!text || text.trim() === "") {
+        return res.json({ translatedText: "" });
+    }
 
-        return res.json({
-            translatedText: ""
+    db.query("SELECT * FROM kamus_slang", async (err, slangResults) => {
+
+        if (err) {
+            return res.json({ translatedText: "DB error" });
+        }
+
+        let processedText = text.toLowerCase();
+
+        slangResults.forEach(item => {
+            const regex = new RegExp(`\\b${item.kata_slang}\\b`, "gi");
+            processedText = processedText.replace(regex, item.kata_formal);
         });
+
+        try {
+
+            const result = await translate.translate(
+                processedText,
+                { from: source, to: target }
+            );
+
+            const translatedText = result.text;
+
+            db.query(
+                `INSERT INTO history_translate
+                (text_asal, text_hasil, bahasa_asal, bahasa_tujuan)
+                VALUES (?, ?, ?, ?)`,
+                [processedText, translatedText, source, target]
+            );
+
+            res.json({ translatedText });
+
+        } catch (error) {
+            console.log(error);
+            res.json({ translatedText: "Translate gagal" });
+        }
+    });
+});
+
+// ======================
+// OCR + PDF + IMAGE UPLOAD
+// ======================
+app.post("/upload-doc", upload.single("file"), async (req, res) => {
+
+    if (!req.file) {
+        return res.json({ text: "Tidak ada file" });
     }
 
     try {
 
-        const result =
-            await translate.translate(
-                text,
+        // ======================
+        // IMAGE OCR
+        // ======================
+        if (req.file.mimetype.startsWith("image")) {
+
+            const fixedPath = "uploads/fixed.png";
+
+            await sharp(req.file.path)
+                .grayscale()
+                .resize({ width: 2000 })
+                .normalize()
+                .sharpen()
+                .threshold(140)
+                .toFile(fixedPath);
+
+            const result = await Tesseract.recognize(
+                fixedPath,
+                "eng",
                 {
-                    from: source,
-                    to: target
+                    logger: m => console.log(m),
+                    tessedit_pageseg_mode: 6
                 }
             );
 
-        const translatedText =
-            result.text;
+            let text = result.data.text || "";
 
-        const sql = `
-            INSERT INTO history_translate
-            (
-                text_asal,
-                text_hasil,
-                bahasa_asal,
-                bahasa_tujuan
-            )
-            VALUES (?, ?, ?, ?)
-        `;
+            text = text
+                .replace(/[^\w\s.,!?]/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
 
-        db.query(
-            sql,
-            [
-                text,
-                translatedText,
-                source,
-                target
-            ],
-            (err) => {
+            return res.json({ text });
+        }
 
-                if(err){
-                    console.log(err);
-                }
+        // ======================
+        // PDF FULL TEXT (FIXED)
+        // ======================
+        if (req.file.mimetype === "application/pdf") {
+
+            const dataBuffer = fs.readFileSync(req.file.path);
+
+            const pdfData = await pdfParse(dataBuffer);
+
+            let text = pdfData.text;
+
+            text = text
+                .replace(/\s+/g, " ")
+                .trim();
+
+            if (!text) {
+                return res.json({
+                    text: "PDF tidak mengandung teks (kemungkinan scan gambar)"
+                });
             }
-        );
 
-        res.json({
-            translatedText
-        });
+            return res.json({ text });
+        }
 
-    } catch (error) {
-
-        console.log(error);
-
-        res.json({
-            translatedText:
-                "Translate gagal"
-        });
+    } catch (err) {
+        console.log(err);
+        res.json({ text: "Gagal membaca file" });
     }
 });
 
-
-// HAPUS SATU HISTORY
+// ======================
+// DELETE HISTORY
+// ======================
 app.get("/delete/:id", (req, res) => {
-
-    const id = req.params.id;
-
-    db.query(
-        "DELETE FROM history_translate WHERE id=?",
-        [id],
-        (err) => {
-
-            if (err) {
-                console.log(err);
-            }
-
-            res.redirect("/");
-        }
-    );
+    db.query("DELETE FROM history_translate WHERE id=?", [req.params.id], () => {
+        res.redirect("/");
+    });
 });
 
-
-// HAPUS SEMUA HISTORY
 app.get("/delete-all", (req, res) => {
-
-    db.query(
-        "DELETE FROM history_translate",
-        (err) => {
-
-            if(err){
-                console.log(err);
-            }
-
-            res.redirect("/");
-        }
-    );
+    db.query("DELETE FROM history_translate", () => {
+        res.redirect("/");
+    });
 });
 
-
+// ======================
+// SERVER
+// ======================
 app.listen(3000, () => {
-
-    console.log(
-        "Server berjalan di http://localhost:3000"
-    );
+    console.log("Server jalan di http://localhost:3000");
 });
