@@ -4,10 +4,7 @@
 
     <title>NLP Translator</title>
 
-    <link
-        rel="stylesheet"
-        href="/css/style.css"
-    >
+    <link rel="stylesheet" href="/css/style.css">
 
 </head>
 
@@ -15,16 +12,60 @@
 
 <div class="main-container">
 
-    <!-- Translator -->
+    <!-- ===================== -->
+    <!-- TRANSLATOR BOX -->
+    <!-- ===================== -->
     <div class="translator-box">
 
-        <h1>NLP Translator</h1>
+        <h1>NLP Translator + OCR AI</h1>
 
+        <!-- ===================== -->
+        <!-- TOGGLE UPLOAD -->
+        <!-- ===================== -->
+
+        <button
+            class="toggle-upload-btn"
+            onclick="toggleUpload()"
+        >
+            📂 Upload Dokumen / Gambar
+        </button>
+
+        <!-- PANEL UPLOAD -->
+        <div id="uploadPanel" class="upload-panel">
+
+            <label for="docInput" class="custom-file-upload">
+                <span>📁 Pilih File</span>
+            </label>
+
+            <input
+                type="file"
+                id="docInput"
+                accept=".png,.jpg,.jpeg,.pdf"
+            >
+
+            <div
+                id="fileName"
+                class="file-name"
+            >
+                Belum ada file dipilih
+            </div>
+
+            <button
+                class="upload-btn"
+                onclick="uploadDoc()"
+            >
+                🚀 Upload Sekarang
+            </button>
+
+        </div>
+
+        <!-- TEXT INPUT -->
         <textarea
             id="text"
-            placeholder="Masukkan teks"
+            placeholder="Masukkan teks atau hasil OCR"
         ></textarea>
 
+        <!-- LANGUAGE SELECT -->
         <div class="select-box">
 
             <select id="source">
@@ -45,33 +86,31 @@
 
         </div>
 
+        <!-- TRANSLATE BUTTON -->
         <button onclick="translateText()">
             Translate
         </button>
 
-        <h2>Terjemahan</h2>
+        <h2>Hasil Terjemahan</h2>
 
         <div id="result"></div>
 
     </div>
 
-
-    <!-- HISTORY -->
+    <!-- ===================== -->
+    <!-- HISTORY BOX -->
+    <!-- ===================== -->
     <div class="history-box">
 
         <div class="history-header">
 
-            <h2>Recents</h2>
+            <h2>History</h2>
 
-            <a
-                href="/delete-all"
-                class="delete-all-btn"
-            >
+            <a href="/delete-all" class="delete-all-btn">
                 Hapus Semua
             </a>
 
         </div>
-
 
         <% if(histories && histories.length > 0){ %>
 
@@ -81,15 +120,9 @@
 
                     <div class="lang-row">
 
-                        <span>
-                            <%= item.bahasa_asal %>
-                        </span>
-
+                        <span><%= item.bahasa_asal %></span>
                         <span>→</span>
-
-                        <span>
-                            <%= item.bahasa_tujuan %>
-                        </span>
+                        <span><%= item.bahasa_tujuan %></span>
 
                     </div>
 
@@ -113,10 +146,7 @@
                         Gunakan
                     </button>
 
-                    <a
-                        class="delete-btn"
-                        href="/delete/<%= item.id %>"
-                    >
+                    <a class="delete-btn" href="/delete/<%= item.id %>">
                         Hapus
                     </a>
 
