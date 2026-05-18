@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+    <title>NLP Translator</title>
+
+    <link
+        rel="stylesheet"
+        href="/css/style.css"
+    >
+
+</head>
+
+<body>
+
+<div class="main-container">
+
+    <!-- Translator -->
+    <div class="translator-box">
+
+        <h1>NLP Translator</h1>
+
+        <textarea
+            id="text"
+            placeholder="Masukkan teks"
+        ></textarea>
+
+        <div class="select-box">
+
+            <select id="source">
+                <option value="id">Indonesia</option>
+                <option value="en">Inggris</option>
+                <option value="ar">Arab</option>
+                <option value="zh-CN">China</option>
+                <option value="ko">Korea</option>
+            </select>
+
+            <select id="target">
+                <option value="en">Inggris</option>
+                <option value="id">Indonesia</option>
+                <option value="ar">Arab</option>
+                <option value="zh-CN">China</option>
+                <option value="ko">Korea</option>
+            </select>
+
+        </div>
+
+        <button onclick="translateText()">
+            Translate
+        </button>
+
+        <h2>Terjemahan</h2>
+
+        <div id="result"></div>
+
+    </div>
+
+
+    <!-- HISTORY -->
+    <div class="history-box">
+
+        <div class="history-header">
+
+            <h2>Recents</h2>
+
+            <a
+                href="/delete-all"
+                class="delete-all-btn"
+            >
+                Hapus Semua
+            </a>
+
+        </div>
+
+
+        <% if(histories && histories.length > 0){ %>
+
+            <% histories.forEach((item) => { %>
+
+                <div class="history-card">
+
+                    <div class="lang-row">
+
+                        <span>
+                            <%= item.bahasa_asal %>
+                        </span>
+
+                        <span>→</span>
+
+                        <span>
+                            <%= item.bahasa_tujuan %>
+                        </span>
+
+                    </div>
+
+                    <div class="history-text">
+                        <%= item.text_asal %>
+                    </div>
+
+                    <div class="history-result">
+                        <%= item.text_hasil %>
+                    </div>
+
+                    <button
+                        class="use-btn"
+                        onclick="useHistory(
+                            '<%= item.text_asal %>',
+                            '<%= item.text_hasil %>',
+                            '<%= item.bahasa_asal %>',
+                            '<%= item.bahasa_tujuan %>'
+                        )"
+                    >
+                        Gunakan
+                    </button>
+
+                    <a
+                        class="delete-btn"
+                        href="/delete/<%= item.id %>"
+                    >
+                        Hapus
+                    </a>
+
+                </div>
+
+            <% }) %>
+
+        <% } else { %>
+
+            <p>Belum ada history</p>
+
+        <% } %>
+
+    </div>
+
+</div>
+
+<script src="/js/script.js"></script>
+
+</body>
+</html>
